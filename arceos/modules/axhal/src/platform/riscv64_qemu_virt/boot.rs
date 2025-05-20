@@ -10,12 +10,16 @@ static mut BOOT_PT_SV39: [u64; 512] = [0; 512];
 
 unsafe fn init_boot_page_table() {
     // 0x8000_0000..0xc000_0000, VRWX_GAD, 1G block
+    // 0x4000_0000 is 1GiB
     BOOT_PT_SV39[2] = (0x80000 << 10) | 0xef;
     // 0xffff_ffc0_8000_0000..0xffff_ffc0_c000_0000, VRWX_GAD, 1G block
     BOOT_PT_SV39[0x102] = (0x80000 << 10) | 0xef;
+
+    // RWX not all 0, so GIANT page(1GiB) set.
 }
 
 unsafe fn init_mmu() {
+    // | VPN[2] (9 bits) | VPN[1] (9 bits) | VPN[0] (9 bits) | page offset (12 bits) |
     let page_table_root = BOOT_PT_SV39.as_ptr() as usize;
     satp::set(satp::Mode::Sv39, 0, page_table_root >> 12);
     riscv::asm::sfence_vma_all();
