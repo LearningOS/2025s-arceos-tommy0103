@@ -2,6 +2,7 @@ use core::borrow::Borrow;
 use core::default::Default;
 use core::hash::{Hash, Hasher, BuildHasherDefault};
 use core::iter::Map;
+use core::mem;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 pub struct FnvHasher(u64);
@@ -52,18 +53,22 @@ struct MapEntry<K, V> {
 pub struct HashMap<K, V> {
     buckets: Vec<Option<Box<MapEntry<K, V>>>>,
     capacity: usize,
+    size: usize,
+    load_factor: f64,
 }
 
 impl<K: Hash, V> HashMap<K, V> {
     pub fn new() -> Self {
-        Self::with_capacity(10000)
+        Self::with_capacity(10)
     }
     pub fn with_capacity(capacity: usize) -> Self {
         let mut buckets = Vec::with_capacity(capacity);
         buckets.resize_with(capacity, || None);
         HashMap { 
             buckets, 
-            capacity
+            capacity,
+            size: 0,
+            load_factor: 0.75,
         } 
     }
     fn hash(&self, key: &K) -> u64 {
@@ -72,6 +77,9 @@ impl<K: Hash, V> HashMap<K, V> {
         hasher.finish()
     }
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+        if self.size as f64 >= self.capacity as f64 * self.load_factor {
+            self.resize();
+        }
         let index = self.hash(&key) as usize % self.capacity ;
         let mut bucket = &mut self.buckets[index];
         match bucket {
@@ -83,6 +91,7 @@ impl<K: Hash, V> HashMap<K, V> {
                         next: None,
                     }
                 ));
+                self.size += 1;
                 None
             },
             Some(_) => {
@@ -97,11 +106,34 @@ impl<K: Hash, V> HashMap<K, V> {
                                 next: None,
                             }
                         ));
+                        self.size += 1;
                         return None;
                     }
                     entry = &mut current.next;
                 }
                 None
+            }
+        }
+    }
+    fn resize(&mut self) {
+        let new_capacity = 2 * self.capacity; 
+        let mut new_buckets = Vec::with_capacity(new_capacity);
+        new_buckets.resize_with(new_capacity, || None);
+
+        let old_buckets = mem::replace(&mut self.buckets, new_buckets);
+        self.capacity = new_capacity;
+        self.size = 0;    
+
+        for bucket in old_buckets.into_iter().flatten() {
+            let mut current= bucket;
+            loop {
+                if let Some(next) = current.next.take() {
+                    self.insert(current.key, current.value);
+                    current = next;
+                }
+                else {
+                    break;
+                }
             }
         }
     }
