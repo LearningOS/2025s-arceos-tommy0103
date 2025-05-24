@@ -53,6 +53,7 @@ int main()
     printf("MapFile ...\n");
 
     create_file(fname);
+    // printf("Perfect\n");
     verify_file(fname);
 
     printf("MapFile ok!\n");

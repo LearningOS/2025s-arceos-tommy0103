@@ -55,6 +55,7 @@ pub fn register_handler(scause: usize, handler: IrqHandler) -> bool {
         } else {
             false
         },
+        // Erase the interrupt bit.
         @EXT => crate::irq::register_handler_common(scause & !INTC_IRQ_BASE, handler),
     )
 }

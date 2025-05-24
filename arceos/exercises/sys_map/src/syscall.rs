@@ -7,9 +7,12 @@ use axerrno::LinuxError;
 use axtask::current;
 use axtask::TaskExtRef;
 use axhal::paging::MappingFlags;
-use arceos_posix_api as api;
+use arceos_posix_api::{self as api, sys_open};
+use memory_addr::{MemoryAddr, VirtAddr};
+use axstd::println;
 
 const SYS_IOCTL: usize = 29;
+// const SYS_OPEN: usize = 55;
 const SYS_OPENAT: usize = 56;
 const SYS_CLOSE: usize = 57;
 const SYS_READ: usize = 63;
@@ -103,6 +106,7 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
          SYS_IOCTL => sys_ioctl(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as _,
         SYS_SET_TID_ADDRESS => sys_set_tid_address(tf.arg0() as _),
         SYS_OPENAT => sys_openat(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _, tf.arg3() as _),
+        // SYS_OPEN => api::sys_open(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _) as isize,
         SYS_CLOSE => sys_close(tf.arg0() as _),
         SYS_READ => sys_read(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
         SYS_WRITE => sys_write(tf.arg0() as _, tf.arg1() as _, tf.arg2() as _),
@@ -136,11 +140,34 @@ fn sys_mmap(
     addr: *mut usize,
     length: usize,
     prot: i32,
-    flags: i32,
+    _flags: i32,
     fd: i32,
     _offset: isize,
 ) -> isize {
-    unimplemented!("no sys_mmap!");
+    let current_task = axtask::current();
+    let mut uspace = current_task.task_ext().aspace.lock();
+    let mut vaddr = VirtAddr::from_mut_ptr_of(addr);
+    let aligned_length = length.align_up_4k();
+    let flags = MappingFlags::from(MmapProt::from_bits(prot).unwrap());
+    // println!("{}", vaddr.as_usize());
+    if addr.is_null() {
+        if let Ok(_vaddr) = uspace.alloc_free(aligned_length, flags | MappingFlags::WRITE) {
+            vaddr = _vaddr.align_up_4k();
+            // println!("{}", vaddr.as_usize());
+        }
+        else {
+            return -1;
+        }
+    }
+    else {
+        vaddr = vaddr.align_up_4k();
+        uspace.alloc_at(vaddr, aligned_length, flags | MappingFlags::WRITE);
+    }
+    let buf = unsafe{core::slice::from_raw_parts_mut(vaddr.as_mut_ptr(), length)};
+    let file = api::get_file_like(fd).unwrap().read(buf);
+    uspace.protect(vaddr, aligned_length, flags);
+    // println!("{}", vaddr.as_usize());
+    vaddr.as_mut_ptr() as isize
 }
 
 fn sys_openat(dfd: c_int, fname: *const c_char, flags: c_int, mode: api::ctypes::mode_t) -> isize {

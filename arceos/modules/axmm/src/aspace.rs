@@ -158,6 +158,32 @@ impl AddrSpace {
         Ok(())
     }
 
+    pub fn alloc_free(
+        &mut self,
+        size: usize,
+        flags: MappingFlags
+    ) -> Result<VirtAddr, AxError> {
+        if let Some(va_start) = self.find_free_area(self.base() + PAGE_SIZE_4K, size, self.va_range) {
+            let area = MemoryArea::new(va_start, size, flags, Backend::new_alloc(true));
+            self.areas.map(area, &mut self.pt, false).map_err(mapping_err_to_ax_err)?;
+            Ok(va_start)
+        }
+        else {
+            Err(AxError::NoMemory)
+        }
+    }
+
+    pub fn alloc_at(
+        &mut self,
+        va_start: VirtAddr,
+        size: usize,
+        flags: MappingFlags
+    ) -> AxResult {
+        let area = MemoryArea::new(va_start, size, flags, Backend::new_alloc(true));
+        self.areas.map(area, &mut self.pt, false).map_err(mapping_err_to_ax_err)?;
+        Ok(())
+    }
+
     /// Removes mappings within the specified virtual address range.
     ///
     /// Returns an error if the address range is out of the address space or not
