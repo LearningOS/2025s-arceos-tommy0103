@@ -1,6 +1,6 @@
 use alloc::collections::BTreeMap;
 use alloc::sync::{Arc, Weak};
-use alloc::{string::String, vec::Vec};
+use alloc::{string::{String, ToString}, vec::Vec};
 
 use axfs_vfs::{VfsDirEntry, VfsNodeAttr, VfsNodeOps, VfsNodeRef, VfsNodeType};
 use axfs_vfs::{VfsError, VfsResult};
@@ -165,6 +165,35 @@ impl VfsNodeOps for DirNode {
         }
     }
 
+    fn rename(&self, src_path: &str, dst_path: &str) -> VfsResult {
+        // axlog::ax_println!("{} {}", src_path, dst_path);
+        let (src_name, src_rest) = split_path(src_path);
+        // let (dst_name, dst_rest) = split_path(dst_path);
+        // axlog::ax_println!("{} {} {} {}", src_name, src_rest.unwrap_or(""), dst_name, dst_rest.unwrap_or(""));
+        let src_node = match src_name {
+            // "" | "." => Ok(Arc::new(self as dyn VfsNodeOps)),
+            ".." => self.parent().ok_or(VfsError::NotFound),
+            _ => self
+                .children
+                .read()
+                .get(src_name)
+                .cloned()
+                .ok_or(VfsError::NotFound),
+        }?;
+        // axlog::ax_println!("qwqqqq {} {}", src_name, dst_name);
+        if let Some(src_rest) = src_rest {
+            src_node.rename(src_rest, dst_path)
+        } else {
+            // let src_node = self.lookup(src_path)?;
+            // let parent_node = src_node.parent();
+            let src_node = self.children.write().remove(src_name);
+            let dst_name = final_filename(dst_path);
+            // axlog::ax_println!("{} {}", src_name, dst_name);
+            self.children.write().insert(dst_name.to_string(), src_node.unwrap());
+            Ok(())
+        }
+    }
+
     axfs_vfs::impl_vfs_dir_default! {}
 }
 
@@ -173,4 +202,14 @@ fn split_path(path: &str) -> (&str, Option<&str>) {
     trimmed_path.find('/').map_or((trimmed_path, None), |n| {
         (&trimmed_path[..n], Some(&trimmed_path[n + 1..]))
     })
+}
+
+fn final_filename(path: &str) -> &str {
+    let (name, rest) = split_path(path);
+    if let Some(rest) = rest {
+        final_filename(rest)
+    }
+    else {
+        name
+    }
 }

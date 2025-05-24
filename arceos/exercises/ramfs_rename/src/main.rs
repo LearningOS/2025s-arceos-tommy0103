@@ -25,6 +25,7 @@ fn rename_file(src: &str, dst: &str) -> io::Result<()> {
 fn print_file(fname: &str) -> io::Result<()> {
     let mut buf = [0; 1024];
     let mut file = File::open(fname)?;
+    println!("{}", fname);
     loop {
         let n = file.read(&mut buf)?;
         if n > 0 {
@@ -42,6 +43,7 @@ fn process() -> io::Result<()> {
     // Just rename, NOT move.
     // So this must happen in the same directory.
     rename_file("/tmp/f1", "/tmp/f2")?;
+    // println!("...");
     print_file("/tmp/f2")
 }
 

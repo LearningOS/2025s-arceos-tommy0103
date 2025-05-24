@@ -40,6 +40,9 @@ repository = "https://github.com/arceos-org/axfs_crates"
 name = "axfs_ramfs"
 path = "src/lib.rs"
 
+[dependencies]
+axlog = { workspace = true }
+
 [dependencies.axfs_vfs]
 version = "0.1"
 
